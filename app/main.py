@@ -24,7 +24,8 @@ app.include_router(user_router, prefix="/auth", tags=["Auth"])
 # Documents
 app.include_router(document_router, prefix="/documents", tags=["Documents"])
 
-# Roles
-app.include_router(role_router, prefix="/roles", tags=["Roles"])
+# Roles and Users
+app.include_router(role_router)
 
+# RAG
 app.include_router(rag_router, prefix="/rag", tags=["RAG"])

@@ -11,11 +11,11 @@ router = APIRouter(prefix="/rag", tags=["RAG"])
 
 @router.post("/index-document")
 def index_document(
-    doc_id: int,
+    document_id: int,
     session: Session = Depends(get_session),
     user=Depends(require_roles(["analyst"]))
 ):
-    doc = session.get(Document, doc_id)
+    doc = session.get(Document, document_id)
 
     if not doc:
         raise HTTPException(404, "Document not found")
@@ -33,8 +33,8 @@ def index_document(
         collection.add(
             documents=[chunk],
             embeddings=[embeddings[i]],
-            ids=[f"{doc_id}_{i}"],
-            metadatas=[{"doc_id": doc_id}]
+            ids=[f"{document_id}_{i}"],
+            metadatas=[{"doc_id": document_id}]
         )
 
     return {"msg": "Document indexed", "chunks": len(chunks)}
@@ -84,18 +84,32 @@ def search(query: dict):
         "raw_chunks": docs
     }
     
-@router.get("/context/{doc_id}")
-def get_context(doc_id: int):
+@router.delete("/remove-document/{id}")
+def remove_document(id: int):
+    results = collection.get()
+    
+    ids_to_delete = []
+    for doc_id in results["ids"]:
+        if doc_id.startswith(f"{id}_"):
+            ids_to_delete.append(doc_id)
+    
+    if ids_to_delete:
+        collection.delete(ids=ids_to_delete)
+    
+    return {"msg": "Document embeddings removed", "deleted_count": len(ids_to_delete)}
+
+@router.get("/context/{document_id}")
+def get_context(document_id: int):
     results = collection.get()
 
     filtered_docs = []
 
     for id_, doc in zip(results["ids"], results["documents"]):
-        if id_.startswith(f"{doc_id}_"):
+        if id_.startswith(f"{document_id}_"):
             filtered_docs.append(doc)
 
     return {
-        "doc_id": doc_id,
+        "document_id": document_id,
         "chunks": filtered_docs
     }
     

@@ -52,19 +52,19 @@ def upload_document(
 def get_documents(session: Session = Depends(get_session)):
     return session.exec(select(Document)).all()
 
-@router.get("/{doc_id}")
-def get_document(doc_id: int, session: Session = Depends(get_session)):
-    doc = session.get(Document, doc_id)
+@router.get("/{document_id}")
+def get_document(document_id: int, session: Session = Depends(get_session)):
+    doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, "Not found")
     return doc
 
-@router.delete("/{doc_id}")
-def delete_document(doc_id: int,
+@router.delete("/{document_id}")
+def delete_document(document_id: int,
                     session: Session = Depends(get_session),
                     user=Depends(require_roles(["admin"]))):
 
-    doc = session.get(Document, doc_id)
+    doc = session.get(Document, document_id)
     if not doc:
         raise HTTPException(404, "Not found")
 
