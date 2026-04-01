@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlmodel import Session
 from app.db import get_session
 from app.models import Document
@@ -11,10 +11,15 @@ router = APIRouter(prefix="/rag", tags=["RAG"])
 
 @router.post("/index-document")
 def index_document(
-    document_id: int,
+    body: dict = Body(...),
     session: Session = Depends(get_session),
     user=Depends(require_roles(["analyst"]))
 ):
+    document_id = body.get("document_id")
+    
+    if not document_id:
+        raise HTTPException(400, "document_id is required")
+    
     doc = session.get(Document, document_id)
 
     if not doc:
@@ -62,26 +67,44 @@ def extract_invoice_data(text):
     return data
 
 @router.post("/search")
-def search(query: dict):
-    query_text = query.get("query")
+def search(body: dict = Body(...)):
+    query_text = body.get("query")
+    
+    if not query_text:
+        raise HTTPException(400, "query is required")
 
     query_embedding = model.encode([query_text]).tolist()
 
     results = collection.query(
         query_embeddings=query_embedding,
-        n_results=5
+        n_results=5,
+        include=["documents", "distances", "metadatas"]
     )
 
     docs = results["documents"][0]
+    distances = results["distances"][0]
+    metadatas = results["metadatas"][0]
 
     combined_text = " ".join(docs)
-
     structured_data = extract_invoice_data(combined_text)
+
+    # Convert distances to similarity scores (1 / (1 + distance))
+    scores = [1 / (1 + distance) for distance in distances]
+
+    # Combine docs with scores
+    results_with_scores = [
+        {
+            "chunk": doc,
+            "score": score,
+            "metadata": metadata
+        }
+        for doc, score, metadata in zip(docs, scores, metadatas)
+    ]
 
     return {
         "query": query_text,
         "structured_data": structured_data,
-        "raw_chunks": docs
+        "results": results_with_scores
     }
     
 @router.delete("/remove-document/{id}")
@@ -112,18 +135,3 @@ def get_context(document_id: int):
         "document_id": document_id,
         "chunks": filtered_docs
     }
-    
-    
-@router.delete("/remove-document/{doc_id}")
-def remove_document(doc_id: int):
-
-    results = collection.get()
-
-    ids_to_delete = [
-        id_ for id_ in results["ids"]
-        if id_.startswith(f"{doc_id}_")
-    ]
-
-    collection.delete(ids=ids_to_delete)
-
-    return {"msg": f"Document {doc_id} removed"}
